@@ -9,17 +9,18 @@ on:
   workflow_dispatch:
     inputs:
       year:
-        description: 'Year (e.g., 2026)'
+        description: 'Year (e.g., 2026) - Leave blank for previous month'
         required: false
       month:
-        description: 'Month (1-12)'
+        description: 'Month (1-12) - Leave blank for previous month'
         required: false
 
 env:
   JIRA_URL: ${{ secrets.JIRA_URL }}
   JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
   JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-  HOURLY_RATE: ${{ secrets.HOURLY_RATE }}
+  HOURLY_RATE: ${{ vars.HOURLY_RATE }}
+  JIRA_PROJECT_KEY: ${{ vars.JIRA_PROJECT_KEY }}
   DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
 #   GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
 #   GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
@@ -70,10 +71,11 @@ jobs:
       - name: Generate invoice
         if: steps.month.outputs.month != ''
         run: |
-          python jira-invoice.py \
-            --year ${{ steps.month.outputs.year }} \
-            --month ${{ steps.month.outputs.month }} \
-            --rate "$HOURLY_RATE"
+          ARGS="--year ${{ steps.month.outputs.year }} --month ${{ steps.month.outputs.month }} --rate $HOURLY_RATE"
+          if [ -n "$JIRA_PROJECT_KEY" ]; then
+            ARGS="$ARGS --project $JIRA_PROJECT_KEY"
+          fi
+          python jira-invoice.py $ARGS
       
       - name: Get invoice details
         if: steps.month.outputs.month != ''
