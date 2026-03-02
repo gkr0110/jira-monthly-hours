@@ -72,17 +72,16 @@ class JiraInvoiceGenerator:
         max_results = 100
         
         while True:
-            url = f"{self.jira_url}/rest/api/3/search/jql"
+            url = f"{self.jira_url}/rest/api/3/search"
             params = {
-                'query': jql,
-                'start': start_at,
+                'jql': jql,
+                'startAt': start_at,
                 'maxResults': max_results,
                 'fields': 'summary,timeoriginalestimate,timeestimate,timespent,project'
             }
             response = self.session.get(url, params=params)
             response.raise_for_status()
             data = response.json()
-            
             if not data.get('issues'):
                 break
             for issue in data['issues']:
