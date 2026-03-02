@@ -1,0 +1,226 @@
+name: Generate and Send Monthly Invoice to Discord
+
+on:
+  # Run every day at 23:59 UTC, check runs when it's the last day of the month
+  schedule:
+    - cron: '59 23 28-31 * *'  # Covers potential last days of month
+  
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      year:
+        description: 'Year (e.g., 2026)'
+        required: false
+      month:
+        description: 'Month (1-12)'
+        required: false
+
+env:
+  JIRA_URL: ${{ secrets.JIRA_URL }}
+  JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+  JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+  HOURLY_RATE: ${{ secrets.HOURLY_RATE }}
+  DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+  GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+  GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
+
+jobs:
+  generate-invoice:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Determine current month
+        id: month
+        run: |
+          if [ -n "${{ github.event.inputs.month }}" ]; then
+            MONTH=${{ github.event.inputs.month }}
+            YEAR=${{ github.event.inputs.year }}
+          else
+            # Check if today is the last day of the month
+            TODAY=$(date +%d)
+            TOMORROW=$(date -d "+1 day" +%d 2>/dev/null || date -v+1d +%d)
+            
+            # If tomorrow is the 1st, today is the last day of the month
+            if [ "$TOMORROW" = "01" ]; then
+              MONTH=$(date +%m)
+              YEAR=$(date +%Y)
+            else
+              echo "Not the last day of the month, skipping invoice generation"
+              exit 0
+            fi
+          fi
+          
+          echo "month=${MONTH}" >> $GITHUB_OUTPUT
+          echo "year=${YEAR}" >> $GITHUB_OUTPUT
+      
+      - name: Generate invoice
+        if: steps.month.outputs.month != ''
+        run: |
+          python jira-invoice.py \
+            --year ${{ steps.month.outputs.year }} \
+            --month ${{ steps.month.outputs.month }} \
+            --rate "$HOURLY_RATE"
+      
+      - name: Get invoice details
+        if: steps.month.outputs.month != ''
+        id: invoice
+        run: |
+          # Extract details from the most recent invoice CSV
+          INVOICE_FILE=$(ls -t invoice_*.csv 2>/dev/null | head -1)
+          if [ ! -f "$INVOICE_FILE" ]; then
+            echo "No invoice file found"
+            exit 1
+          fi
+          
+          # Extract the total row (last row)
+          TOTAL_LINE=$(tail -1 "$INVOICE_FILE")
+          TOTAL_HOURS=$(echo "$TOTAL_LINE" | cut -d',' -f4)
+          TOTAL_AMOUNT=$(echo "$TOTAL_LINE" | cut -d',' -f6)
+          ENTRY_COUNT=$(($(wc -l < "$INVOICE_FILE") - 2))  # Subtract header and total row
+          
+          echo "file=${INVOICE_FILE}" >> $GITHUB_OUTPUT
+          echo "total_hours=${TOTAL_HOURS}" >> $GITHUB_OUTPUT
+          echo "total_amount=${TOTAL_AMOUNT}" >> $GITHUB_OUTPUT
+          echo "entries=${ENTRY_COUNT}" >> $GITHUB_OUTPUT
+      
+      - name: Send to Discord
+        if: steps.month.outputs.month != ''
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
+          payload: |
+            {
+              "content": "📊 **Monthly Invoice Generated**",
+              "embeds": [
+                {
+                  "title": "Monthly Invoice - ${{ steps.month.outputs.year }}-${{ steps.month.outputs.month }}",
+                  "description": "Jira worklog invoice has been generated and is ready for review.",
+                  "color": 3066993,
+                  "fields": [
+                    {
+                      "name": "Total Hours",
+                      "value": "${{ steps.invoice.outputs.total_hours }} hrs",
+                      "inline": true
+                    },
+                    {
+                      "name": "Total Amount",
+                      "value": "${{ steps.invoice.outputs.total_amount }} USD",
+                      "inline": true
+                    },
+                    {
+                      "name": "Entries",
+                      "value": "${{ steps.invoice.outputs.entries }}",
+                      "inline": true
+                    },
+                    {
+                      "name": "Rate",
+                      "value": "${{ env.HOURLY_RATE }}/hour",
+                      "inline": true
+                    },
+                    {
+                      "name": "File",
+                      "value": "${{ steps.invoice.outputs.file }}",
+                      "inline": false
+                    }
+                  ],
+                  "footer": {
+                    "text": "Download from Actions artifacts"
+                  }
+                }
+              ]
+            }
+      
+      - name: Upload invoice as artifact
+        if: steps.month.outputs.month != ''
+        uses: actions/upload-artifact@v3
+        with:
+          name: invoice-${{ steps.month.outputs.year }}-${{ steps.month.outputs.month }}
+          path: invoice_*.csv
+          retention-days: 30
+      
+      - name: Upload to Google Drive
+        if: steps.month.outputs.month != ''
+        run: |
+          python - << 'EOF'
+          import os
+          import json
+          from google.auth.transport.requests import Request
+          from google.oauth2.service_account import Credentials
+          from googleapiclient.discovery import build
+          from googleapiclient.http import MediaFileUpload
+          import glob
+          
+          # Get credentials from environment variable
+          creds_json = os.getenv('GOOGLE_CREDENTIALS')
+          if not creds_json:
+              raise ValueError("GOOGLE_CREDENTIALS environment variable not set")
+          
+          creds_dict = json.loads(creds_json)
+          credentials = Credentials.from_service_account_info(
+              creds_dict,
+              scopes=['https://www.googleapis.com/auth/drive']
+          )
+          
+          # Build Google Drive service
+          service = build('drive', 'v3', credentials=credentials)
+          
+          # Get folder ID
+          folder_id = os.getenv('GOOGLE_DRIVE_FOLDER_ID')
+          if not folder_id:
+              raise ValueError("GOOGLE_DRIVE_FOLDER_ID environment variable not set")
+          
+          # Find the invoice CSV file
+          invoices = glob.glob('invoice_*.csv')
+          if not invoices:
+              raise FileNotFoundError("No invoice CSV file found")
+          
+          invoice_file = invoices[0]
+          print(f"Uploading {invoice_file} to Google Drive...")
+          
+          # Upload file to Google Drive
+          file_metadata = {
+              'name': invoice_file,
+              'parents': [folder_id]
+          }
+          
+          media = MediaFileUpload(invoice_file, mimetype='text/csv')
+          file = service.files().create(
+              body=file_metadata,
+              media_body=media,
+              fields='id, webViewLink'
+          ).execute()
+          
+          print(f"✓ File uploaded successfully!")
+          print(f"  File ID: {file.get('id')}")
+          print(f"  Link: {file.get('webViewLink')}")
+          EOF
+      
+      - name: Notify on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
+          payload: |
+            {
+              "content": "❌ **Invoice Generation Failed**",
+              "embeds": [
+                {
+                  "title": "Error",
+                  "description": "Failed to generate or send invoice. Check workflow logs.",
+                  "color": 15158332
+                }
+              ]
+            }
