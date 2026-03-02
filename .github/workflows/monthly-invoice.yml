@@ -21,8 +21,8 @@ env:
   JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
   HOURLY_RATE: ${{ secrets.HOURLY_RATE }}
   DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-  GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
-  GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
+#   GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+#   GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
 
 jobs:
   generate-invoice:
@@ -151,62 +151,62 @@ jobs:
           path: invoice_*.csv
           retention-days: 30
       
-      - name: Upload to Google Drive
-        if: steps.month.outputs.month != ''
-        run: |
-          python - << 'EOF'
-          import os
-          import json
-          from google.auth.transport.requests import Request
-          from google.oauth2.service_account import Credentials
-          from googleapiclient.discovery import build
-          from googleapiclient.http import MediaFileUpload
-          import glob
-          
-          # Get credentials from environment variable
-          creds_json = os.getenv('GOOGLE_CREDENTIALS')
-          if not creds_json:
-              raise ValueError("GOOGLE_CREDENTIALS environment variable not set")
-          
-          creds_dict = json.loads(creds_json)
-          credentials = Credentials.from_service_account_info(
-              creds_dict,
-              scopes=['https://www.googleapis.com/auth/drive']
-          )
-          
-          # Build Google Drive service
-          service = build('drive', 'v3', credentials=credentials)
-          
-          # Get folder ID
-          folder_id = os.getenv('GOOGLE_DRIVE_FOLDER_ID')
-          if not folder_id:
-              raise ValueError("GOOGLE_DRIVE_FOLDER_ID environment variable not set")
-          
-          # Find the invoice CSV file
-          invoices = glob.glob('invoice_*.csv')
-          if not invoices:
-              raise FileNotFoundError("No invoice CSV file found")
-          
-          invoice_file = invoices[0]
-          print(f"Uploading {invoice_file} to Google Drive...")
-          
-          # Upload file to Google Drive
-          file_metadata = {
-              'name': invoice_file,
-              'parents': [folder_id]
-          }
-          
-          media = MediaFileUpload(invoice_file, mimetype='text/csv')
-          file = service.files().create(
-              body=file_metadata,
-              media_body=media,
-              fields='id, webViewLink'
-          ).execute()
-          
-          print(f"✓ File uploaded successfully!")
-          print(f"  File ID: {file.get('id')}")
-          print(f"  Link: {file.get('webViewLink')}")
-          EOF
+      # - name: Upload to Google Drive
+      #   if: steps.month.outputs.month != ''
+      #   run: |
+      #     python - << 'EOF'
+      #     import os
+      #     import json
+      #     from google.auth.transport.requests import Request
+      #     from google.oauth2.service_account import Credentials
+      #     from googleapiclient.discovery import build
+      #     from googleapiclient.http import MediaFileUpload
+      #     import glob
+      #     
+      #     # Get credentials from environment variable
+      #     creds_json = os.getenv('GOOGLE_CREDENTIALS')
+      #     if not creds_json:
+      #         raise ValueError("GOOGLE_CREDENTIALS environment variable not set")
+      #     
+      #     creds_dict = json.loads(creds_json)
+      #     credentials = Credentials.from_service_account_info(
+      #         creds_dict,
+      #         scopes=['https://www.googleapis.com/auth/drive']
+      #     )
+      #     
+      #     # Build Google Drive service
+      #     service = build('drive', 'v3', credentials=credentials)
+      #     
+      #     # Get folder ID
+      #     folder_id = os.getenv('GOOGLE_DRIVE_FOLDER_ID')
+      #     if not folder_id:
+      #         raise ValueError("GOOGLE_DRIVE_FOLDER_ID environment variable not set")
+      #     
+      #     # Find the invoice CSV file
+      #     invoices = glob.glob('invoice_*.csv')
+      #     if not invoices:
+      #         raise FileNotFoundError("No invoice CSV file found")
+      #     
+      #     invoice_file = invoices[0]
+      #     print(f"Uploading {invoice_file} to Google Drive...")
+      #     
+      #     # Upload file to Google Drive
+      #     file_metadata = {
+      #         'name': invoice_file,
+      #         'parents': [folder_id]
+      #     }
+      #     
+      #     media = MediaFileUpload(invoice_file, mimetype='text/csv')
+      #     file = service.files().create(
+      #         body=file_metadata,
+      #         media_body=media,
+      #         fields='id, webViewLink'
+      #     ).execute()
+      #     
+      #     print(f"✓ File uploaded successfully!")
+      #     print(f"  File ID: {file.get('id')}")
+      #     print(f"  Link: {file.get('webViewLink')}")
+      #     EOF
       
       - name: Notify on failure
         if: failure()
