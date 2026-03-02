@@ -98,12 +98,11 @@ jobs:
       
       - name: Send to Discord
         if: steps.month.outputs.month != ''
-        uses: tsickert/discord-webhook@v3
-        with:
-          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
-          content: "📊 **Monthly Invoice Generated**"
-          embeds: |
-            [
+        run: |
+          cat > /tmp/discord-payload.json << 'EOF'
+          {
+            "content": "📊 **Monthly Invoice Generated**",
+            "embeds": [
               {
                 "title": "Monthly Invoice - ${{ steps.month.outputs.year }}-${{ steps.month.outputs.month }}",
                 "description": "Jira worklog invoice has been generated and is ready for review.",
@@ -140,6 +139,11 @@ jobs:
                 }
               }
             ]
+          }
+          EOF
+          curl -X POST ${{ secrets.DISCORD_WEBHOOK }} \
+            -H "Content-Type: application/json" \
+            -d @/tmp/discord-payload.json
       
       - name: Upload invoice as artifact
         if: steps.month.outputs.month != ''
@@ -208,15 +212,19 @@ jobs:
       
       - name: Notify on failure
         if: failure()
-        uses: tsickert/discord-webhook@v3
-        with:
-          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
-          content: "❌ **Invoice Generation Failed**"
-          embeds: |
-            [
+        run: |
+          cat > /tmp/discord-error.json << 'EOF'
+          {
+            "content": "❌ **Invoice Generation Failed**",
+            "embeds": [
               {
                 "title": "Error",
                 "description": "Failed to generate or send invoice. Check workflow logs at ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
                 "color": 15158332
               }
             ]
+          }
+          EOF
+          curl -X POST ${{ secrets.DISCORD_WEBHOOK }} \
+            -H "Content-Type: application/json" \
+            -d @/tmp/discord-error.json
