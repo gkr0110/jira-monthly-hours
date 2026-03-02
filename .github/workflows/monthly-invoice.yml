@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       year:
-        description: 'Year (e.g., 2026) - Leave blank for previous month'
+        description: 'Year (e.g., 2026) - Leave blank for current year'
         required: false
       month:
         description: 'Month (1-12) - Leave blank for previous month'
