@@ -58,19 +58,21 @@ class JiraInvoiceGenerator:
         Returns:
             List of worklog entries
         """
-        # Build JQL query
-        jql = f"worklogDate >= '{start_date}' AND worklogDate <= '{end_date}'"
+        # Build JQL query - note: worklogDate not supported in search API, 
+        # we'll filter worklogs by date in Python instead
         if project:
-            jql = f"project = {project} AND {jql}"
+            jql = f"project = {project}"
+        else:
+            jql = "ORDER BY updated DESC"
         
         worklogs = []
         start_at = 0
         max_results = 100
         
         while True:
-            url = f"{self.jira_url}/rest/api/3/search/jql"
+            url = f"{self.jira_url}/rest/api/3/search"
             params = {
-                'query': jql,
+                'jql': jql,
                 'startAt': start_at,
                 'maxResults': max_results,
                 'fields': 'summary,timeoriginalestimate,timeestimate,timespent,project'
