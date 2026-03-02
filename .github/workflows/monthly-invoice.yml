@@ -145,7 +145,7 @@ jobs:
       
       - name: Upload invoice as artifact
         if: steps.month.outputs.month != ''
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v7
         with:
           name: invoice-${{ steps.month.outputs.year }}-${{ steps.month.outputs.month }}
           path: invoice_*.csv
