@@ -49,17 +49,18 @@ jobs:
             MONTH=${{ github.event.inputs.month }}
             YEAR=${{ github.event.inputs.year }}
           else
-            # Check if today is the last day of the month
+            # Check if today is the last day of the month (scheduled run)
             TODAY=$(date +%d)
             TOMORROW=$(date -d "+1 day" +%d 2>/dev/null || date -v+1d +%d)
             
-            # If tomorrow is the 1st, today is the last day of the month
             if [ "$TOMORROW" = "01" ]; then
+              # Last day of month - use current month for scheduled runs
               MONTH=$(date +%m)
               YEAR=$(date +%Y)
             else
-              echo "Not the last day of the month, skipping invoice generation"
-              exit 0
+              # Manual trigger without inputs - use previous month as default
+              MONTH=$(date -d "last month" +%m 2>/dev/null || date -v-1m +%m)
+              YEAR=$(date -d "last month" +%Y 2>/dev/null || date -v-1m +%Y)
             fi
           fi
           
