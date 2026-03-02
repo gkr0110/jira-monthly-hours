@@ -58,41 +58,42 @@ class JiraInvoiceGenerator:
         Returns:
             List of worklog entries
         """
-        # Build JQL query - note: worklogDate not supported in search API, 
-        # we'll filter worklogs by date in Python instead
+        # Use a bounded JQL query required by Jira Cloud
+        # Restrict by created date (not worklogDate, which is not supported)
+        start_str = start_date.strftime('%Y-%m-%d')
+        end_str = end_date.strftime('%Y-%m-%d')
         if project:
-            jql = f"project = {project}"
+            jql = f"project = {project} AND created >= \"{start_str}\" AND created <= \"{end_str}\" ORDER BY updated DESC"
         else:
-            jql = "ORDER BY updated DESC"
+            jql = f"created >= \"{start_str}\" AND created <= \"{end_str}\" ORDER BY updated DESC"
         
         worklogs = []
         start_at = 0
         max_results = 100
         
         while True:
-            url = f"{self.jira_url}/rest/api/3/search"
+            url = f"{self.jira_url}/rest/api/3/search/jql"
             params = {
-                'jql': jql,
-                'startAt': start_at,
+                'query': jql,
+                'start': start_at,
                 'maxResults': max_results,
                 'fields': 'summary,timeoriginalestimate,timeestimate,timespent,project'
             }
-            
             response = self.session.get(url, params=params)
             response.raise_for_status()
             data = response.json()
             
+            if not data.get('issues'):
+                break
             for issue in data['issues']:
                 issue_key = issue['key']
                 summary = issue['fields']['summary']
                 project_key = issue['fields']['project']['key']
-                
                 # Get worklog details for this issue
                 worklog_url = f"{self.jira_url}/rest/api/3/issue/{issue_key}/worklog"
                 worklog_response = self.session.get(worklog_url)
                 worklog_response.raise_for_status()
                 worklog_data = worklog_response.json()
-                
                 # Filter worklogs by current user and date range
                 for worklog in worklog_data['worklogs']:
                     if worklog['author']['accountId'] == self.get_current_user():
