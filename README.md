@@ -70,7 +70,15 @@ Navigate to your repository's **Settings > Secrets and variables > Actions** and
 | `DISCORD_WEBHOOK` | Discord channel webhook URL | `https://discord.com/api/webhooks/...` |
 | `GOOGLE_CREDENTIALS` | Google service account JSON (entire file contents) | `{"type": "service_account", ...}` |
 | `GOOGLE_DRIVE_FOLDER_ID` | Google Drive folder ID for CSV storage | `1A2B3C4D5E6F...` |
+#### Configure GitHub Variables (Optional)
 
+For optional configuration that isn't sensitive, navigate to **Settings > Secrets and variables > Variables** and add:
+
+| Variable Name | Description | Example |
+|-------------|-------------|----------|
+| `JIRA_PROJECT_KEY` | *(Optional)* Jira project key to filter worklogs | `GAL` or leave blank for all projects |
+
+If `JIRA_PROJECT_KEY` is set, only worklogs from that project will be included in the invoice.
 #### How to Generate These Secrets
 
 For detailed instructions on generating all secrets, see [SETUP_GUIDE.md](SETUP_GUIDE.md). Quick summary:

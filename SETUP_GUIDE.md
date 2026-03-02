@@ -233,16 +233,29 @@ fi
 
 ## Customization Options
 
-### Add Project Filter
-To only include worklogs from specific Jira projects:
+### Add Project Filter (Optional)
+
+By default, the script fetches worklogs from all Jira projects. To limit results to a specific project:
+
+**For local runs:**
+```bash
+python jira-invoice.py --year 2026 --month 3 --rate 50 --project "GAL"
+```
+
+**For GitHub Actions workflow:**
+Edit `.github/workflows/monthly-invoice.yml` and add `--project` to the invoice generation step:
 
 ```yaml
 python jira-invoice.py \
   --year ${{ steps.month.outputs.year }} \
   --month ${{ steps.month.outputs.month }} \
   --rate "$HOURLY_RATE" \
-  --project "GAL"  # Add this line
+  --project "GAL"
 ```
+
+**Supported values:**
+- Project key string (e.g., `GAL`, `PROJ`, `ABC`)
+- Case-sensitive in Jira queries
 
 ### Change Discord Webhook
 To send to a different Discord channel, update the `DISCORD_WEBHOOK` secret with the new channel's webhook URL

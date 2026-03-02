@@ -10,6 +10,7 @@ Use this checklist to track your setup progress.
 
 ## Part 2: Gather Credentials
 - [ ] Generate Jira API Token from https://id.atlassian.com/manage-profile/security/api-tokens
+- [ ] Note your Jira project key(s) if you want to filter worklogs (e.g., `GAL`, `PROJ`) - *optional*
 - [ ] Create Discord server/channel for invoice notifications
 - [ ] Get Discord Webhook URL from the channel settings
 - [ ] List your hourly billing rate
