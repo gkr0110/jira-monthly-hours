@@ -68,9 +68,9 @@ class JiraInvoiceGenerator:
         max_results = 100
         
         while True:
-            url = f"{self.jira_url}/rest/api/3/search"
+            url = f"{self.jira_url}/rest/api/3/search/jql"
             params = {
-                'jql': jql,
+                'query': jql,
                 'startAt': start_at,
                 'maxResults': max_results,
                 'fields': 'summary,timeoriginalestimate,timeestimate,timespent,project'
