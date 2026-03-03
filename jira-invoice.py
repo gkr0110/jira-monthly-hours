@@ -134,8 +134,26 @@ class JiraInvoiceGenerator:
             output_file: Output CSV filename
             hourly_rate: Billing rate per hour
         """
+        # Group worklogs by issue key
+        grouped = {}
+        for worklog in worklogs:
+            issue_key = worklog['issue_key']
+            if issue_key not in grouped:
+                grouped[issue_key] = {
+                    'issue_key': issue_key,
+                    'summary': worklog['summary'],
+                    'project': worklog['project'],
+                    'total_hours': 0,
+                    'dates': []
+                }
+            grouped[issue_key]['total_hours'] += worklog['time_spent_hours']
+            grouped[issue_key]['dates'].append(worklog['date'])
+        
+        # Sort by issue key
+        sorted_issues = sorted(grouped.values(), key=lambda x: x['issue_key'])
+        
         with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
-            fieldnames = ['Issue Key', 'Summary', 'Date', 'Time Spent (Hours)', 'Rate (USD/hr)', 'Amount (USD)', 'Project']
+            fieldnames = ['Issue Key', 'Summary', 'Date Range', 'Time Spent (Hours)', 'Rate (USD/hr)', 'Amount (USD)', 'Project']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             
             writer.writeheader()
@@ -143,29 +161,33 @@ class JiraInvoiceGenerator:
             total_hours = 0
             total_amount = 0
             
-            # Sort by date
-            sorted_worklogs = sorted(worklogs, key=lambda x: x['date'])
-            
-            for worklog in sorted_worklogs:
-                amount = worklog['time_spent_hours'] * hourly_rate
-                total_hours += worklog['time_spent_hours']
+            for issue in sorted_issues:
+                amount = issue['total_hours'] * hourly_rate
+                total_hours += issue['total_hours']
                 total_amount += amount
                 
+                # Create date range string
+                dates = sorted(set(issue['dates']))
+                if len(dates) == 1:
+                    date_range = dates[0].isoformat()
+                else:
+                    date_range = f"{dates[0].isoformat()} to {dates[-1].isoformat()}"
+                
                 writer.writerow({
-                    'Issue Key': worklog['issue_key'],
-                    'Summary': worklog['summary'],
-                    'Date': worklog['date'].isoformat(),
-                    'Time Spent (Hours)': round(worklog['time_spent_hours'], 2),
+                    'Issue Key': issue['issue_key'],
+                    'Summary': issue['summary'],
+                    'Date Range': date_range,
+                    'Time Spent (Hours)': round(issue['total_hours'], 2),
                     'Rate (USD/hr)': hourly_rate,
                     'Amount (USD)': round(amount, 2),
-                    'Project': worklog['project']
+                    'Project': issue['project']
                 })
             
             # Write total row
             writer.writerow({
                 'Issue Key': 'TOTAL:',
                 'Summary': '',
-                'Date': '',
+                'Date Range': '',
                 'Time Spent (Hours)': round(total_hours, 2),
                 'Rate (USD/hr)': '',
                 'Amount (USD)': round(total_amount, 2),
