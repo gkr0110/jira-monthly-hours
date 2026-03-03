@@ -102,7 +102,8 @@ jobs:
       - name: Send to Discord
         if: steps.month.outputs.month != ''
         run: |
-          cat > /tmp/discord-payload.json << 'EOF'
+          ARTIFACT_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          cat > /tmp/discord-payload.json << EOF
           {
             "content": "📊 **Monthly Invoice Generated**",
             "embeds": [
@@ -134,6 +135,11 @@ jobs:
                   {
                     "name": "File",
                     "value": "${{ steps.invoice.outputs.file }}",
+                    "inline": false
+                  },
+                  {
+                    "name": "Download",
+                    "value": "[Click here to download](${ARTIFACT_URL})",
                     "inline": false
                   }
                 ],
