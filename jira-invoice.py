@@ -38,13 +38,16 @@ class JiraInvoiceGenerator:
         self.session = requests.Session()
         self.session.auth = self.auth
         self.session.headers.update(self.headers)
+        self.current_user_id = None
     
     def get_current_user(self):
-        """Get current user's account ID"""
-        url = f"{self.jira_url}/rest/api/3/myself"
-        response = self.session.get(url)
-        response.raise_for_status()
-        return response.json()['accountId']
+        """Get current user's account ID (cached)"""
+        if self.current_user_id is None:
+            url = f"{self.jira_url}/rest/api/3/myself"
+            response = self.session.get(url)
+            response.raise_for_status()
+            self.current_user_id = response.json()['accountId']
+        return self.current_user_id
     
     def get_worklogs(self, start_date, end_date, project=None):
         """
@@ -68,22 +71,27 @@ class JiraInvoiceGenerator:
             jql = f"created >= \"{start_str}\" AND created <= \"{end_str}\" ORDER BY updated DESC"
         
         worklogs = []
-        start_at = 0
+        next_page_token = None
         max_results = 100
+        current_user_id = self.get_current_user()
         
         while True:
-            url = f"{self.jira_url}/rest/api/3/search"
+            url = f"{self.jira_url}/rest/api/3/search/jql"
             params = {
                 'jql': jql,
-                'startAt': start_at,
                 'maxResults': max_results,
                 'fields': 'summary,timeoriginalestimate,timeestimate,timespent,project'
             }
+            if next_page_token:
+                params['nextPageToken'] = next_page_token
+            
             response = self.session.get(url, params=params)
             response.raise_for_status()
             data = response.json()
+            
             if not data.get('issues'):
                 break
+            
             for issue in data['issues']:
                 issue_key = issue['key']
                 summary = issue['fields']['summary']
@@ -95,7 +103,7 @@ class JiraInvoiceGenerator:
                 worklog_data = worklog_response.json()
                 # Filter worklogs by current user and date range
                 for worklog in worklog_data['worklogs']:
-                    if worklog['author']['accountId'] == self.get_current_user():
+                    if worklog['author']['accountId'] == current_user_id:
                         worklog_date = datetime.strptime(worklog['started'][:10], '%Y-%m-%d').date()
                         if start_date <= worklog_date <= end_date:
                             time_spent_seconds = worklog['timeSpentSeconds']
@@ -110,11 +118,10 @@ class JiraInvoiceGenerator:
                                 'time_spent_hours': time_spent_hours,
                             })
             
-            # Check if there are more results
-            if len(data['issues']) < max_results:
+            # Check if there are more results using the new pagination
+            next_page_token = data.get('nextPageToken')
+            if not next_page_token:
                 break
-            
-            start_at += max_results
         
         return worklogs
     
