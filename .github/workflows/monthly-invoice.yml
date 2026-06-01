@@ -3,7 +3,7 @@ name: Generate and Send Monthly Invoice to Discord
 on:
   # Run every day at 23:59 UTC, check runs when it's the last day of the month
   schedule:
-    - cron: '59 23 28-31 * *'  # Covers potential last days of month
+    - cron: '00 00 01 * *'  # 1st of every month
   
   # Allow manual trigger
   workflow_dispatch:
